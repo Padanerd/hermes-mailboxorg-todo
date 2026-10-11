@@ -1,0 +1,11 @@
+name: mailbox-todo
+version: "1.0.0"
+description: "Narrow Mailbox.org CalDAV VTODO integration for Signal capture and explicit Hermes task delegation."
+author: Padanerd
+kind: standalone
+tags:
+  - mailbox.org
+  - caldav
+  - VTODO
+  - signal
+  - privacy

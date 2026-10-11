@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.env.*
+*.env
+pilot.json
+*credentials*
+*.sqlite*
+*.db
+*.db-*
+*.log
+logs/
+sessions/
+.hermes/
+.DS_Store
