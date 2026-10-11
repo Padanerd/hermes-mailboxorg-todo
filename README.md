@@ -1,4 +1,4 @@
-# mailboxorg
+# hermes-mailboxorg-todo
 
 A privacy-conscious **Mailbox.org CalDAV VTODO connector for Hermes Agent**.
 Mailbox.org remains the canonical task store, including tasks used with iPhone
