@@ -36,6 +36,9 @@ field through plugin hooks without changing Hermes core.
   accepted. The live evidence above concerns the original pilot.
 - No claim of a complete security audit, broad compatibility, or exactly-once
   external transactions is made.
+- Configurable command aliases and English Signal replies were added after the
+  original pilot acceptance. That acceptance does not verify these additions;
+  the updated implementation has not undergone a new live Signal/iPhone test.
 
 ## Publication review
 

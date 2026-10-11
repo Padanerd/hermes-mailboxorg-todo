@@ -7,11 +7,11 @@ or Hermes product.
 
 ## Workflow
 
-- Send `Merke: Buy coffee` in your existing Signal home channel to capture a
+- Send `Remember: Buy coffee` in your existing Signal home channel to capture a
   task in Inbox. Inbox is never executed.
-- An explicit deadline, such as `Merke: Review draft bis 2026-12-15`, becomes
+- An explicit deadline, such as `Remember: Review draft due 2026-12-15`, becomes
   the task's due date. No deadline or time is invented.
-- Send `Delegiere: Compare three options` or create a new task in Hermes to
+- Send `Delegate: Compare three options` or create a new task in Hermes to
   delegate work. Existing tasks are baselined at setup and never started.
 - A separate Cron monitor checks about every five minutes. Unchanged output
   suppresses the model run and Signal delivery.
@@ -42,6 +42,45 @@ third-party messages, destructive actions and privileged changes require
 separate approval. The worker exposes only the web and pilot toolsets, with
 MCP excluded. Recording an approval does not add transaction tools. Embedded
 instructions in task notes or linked pages are untrusted data.
+
+## Command configuration
+
+English commands `Remember:` and `Delegate:` are available by default.
+The original German aliases `Merke:` and `Delegiere:` remain available.
+Names are case-insensitive and require a colon; an unrecognized prefix is left
+to the ordinary Hermes conversation rather than saved by the connector.
+
+After onboarding, add these optional fields to your **local**
+`~/.hermes/plugins/mailbox-todo/pilot.json`, preserving the existing account,
+collection URLs and other fields. Never upload that file:
+
+```json
+{
+  "commands": {
+    "Inbox": ["Remember", "Merke", "Capture"],
+    "Hermes": ["Delegate", "Delegiere", "Do"]
+  },
+  "reply_language": "en"
+}
+```
+
+This is a configuration fragment, not a complete configuration file. Custom
+alias lists replace the defaults: include any aliases you want to keep. Both
+roles need at least one unique alias; aliases can contain letters, spaces and
+hyphens. `Approve` and `Freigabe` are reserved for task-scoped approval.
+The configuration is read for each message, so alias changes need no reload.
+Keep the file private with mode 0600. Re-running onboarding writes a fresh
+configuration; reapply optional fields afterwards.
+
+`reply_language` selects English (`en`, default) or German (`de`) for the
+connector's direct Signal capture/approval replies. It does not translate task
+contents or the existing managed task-note labels. The scheduled worker uses
+the task's language for its result text.
+
+Use an explicit date such as `due 2026-12-15` or `by 2026-12-15`. German date
+cues and relative dates remain supported; English natural-language relative
+dates are not currently parsed. No deadline is inferred from arbitrary prose.
+For approval, send `Approve FREI-...` or the compatible `Freigabe FREI-...`.
 
 ## Requirements
 

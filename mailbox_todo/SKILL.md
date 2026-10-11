@@ -1,7 +1,7 @@
 ---
 name: mailbox-hermes-todos
 description: "Safely capture Signal reminders and process explicitly delegated Mailbox.org VTODOs."
-version: 1.0.0
+version: 1.1.0
 author: Padanerd
 license: MIT
 metadata:
@@ -18,9 +18,9 @@ such as Eingang. Never rename or select another collection automatically.
 
 ## Capture and delegation
 
-- A Signal message beginning with Merke: is saved to Inbox. Inbox is capture
+- A Signal message beginning with Remember: (or Merke:) is saved to Inbox. Inbox is capture
   only. Never execute or scan Inbox tasks.
-- Delegiere: creates a task in Hermes. A new open VTODO created in Hermes is
+- Delegate: (or Delegiere:) creates a task in Hermes. A new open VTODO created in Hermes is
   a work order.
 - At first setup, existing Hermes resources are baselined from href and ETag
   metadata only. Do not infer that an existing task is delegated work.
@@ -30,6 +30,10 @@ such as Eingang. Never rename or select another collection automatically.
 - Capture dates only when a due date is explicit and unambiguous. The Signal
   handler accepts ISO and German numeric dates plus explicitly cued terms such
   as “bis morgen” or “fällig in 3 Tagen”; it never invents a time or due date.
+- Owners can replace capture/delegation aliases through the local `commands`
+  configuration. Match these names deterministically with a colon; never infer
+  delegation from unrecognized prose. `reply_language` selects en/de for direct
+  Signal replies; task contents retain their own language.
 
 ## Privacy and trust
 
@@ -66,7 +70,7 @@ privileged changes need separate approval. The scheduled worker has only the
 web and Mailbox ToDo toolsets; it cannot send external messages or perform
 transactions. Call mailbox_todo_request_approval with the exact scope, leave
 the task open, and wait. The owner can send the displayed FREI code in the
-configured Signal home channel using the form “Freigabe FREI-...”. This
+configured Signal home channel using “Approve FREI-...” or “Freigabe FREI-...”. This
 records a one-time approval for that task and scope; it does not grant the
 worker any additional tools.
 

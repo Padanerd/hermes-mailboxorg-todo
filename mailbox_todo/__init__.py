@@ -17,16 +17,16 @@ from . import ical
 from .dav import CalDAV, DavError
 from .queue import PilotPoller, QueueStore
 from .secrets import SecretUnavailable, get_dav_password
-from .settings import SettingsError, load_settings
+from .settings import DEFAULT_COMMANDS, SettingsError, load_settings
 
 _SKILL = Path(__file__).with_name("SKILL.md")
 _DATE_CUE = re.compile(
-    r"(?i)\b(?:fällig(?:\s+am)?|bis|deadline|due(?:\s+date)?)(?:\s*[:=]|\s+)?\s*"
+    r"(?i)\b(?:fällig(?:\s+am)?|bis|by|deadline|due(?:\s+date)?)(?:\s*[:=]|\s+)?\s*"
     r"(\d{4}-\d{2}-\d{2}|\d{1,2}\.\d{1,2}\.\d{4}|übermorgen|morgen|heute|"
     r"in\s+\d+\s+(?:tagen?|wochen?))\b"
 )
-_DATE_MENTION = re.compile(r"(?i)\b(?:fällig|bis|deadline|due)\b")
-_APPROVAL = re.compile(r"(?i)^freigabe\s*:?\s+(FREI-[A-F0-9]{8})$")
+_DATE_MENTION = re.compile(r"(?i)\b(?:fällig|bis|by|deadline|due)\b")
+_APPROVAL = re.compile(r"(?i)^(?:freigabe|approve)\s*:?\s+(FREI-[A-F0-9]{8})$")
 _MAX_NOTE = 12000
 
 
@@ -361,6 +361,27 @@ def _trusted_signal_source(platform: str, source: Any) -> bool:
     return bool(home and allowed and chat_id == home and sender in allowed)
 
 
+def _capture_options():
+    # Read only local configuration, never credentials or DAV data. The defaults
+    # also let recognized commands receive a safe error before setup is complete.
+    try:
+        settings = load_settings()
+        return settings.commands, settings.reply_language
+    except SettingsError:
+        return DEFAULT_COMMANDS, "en"
+
+
+def _match_capture(text: str, commands: dict[str, tuple[str, ...]]):
+    prefix, separator, body = text.partition(":")
+    if not separator or not body.strip():
+        return None
+    prefix = prefix.strip().casefold()
+    for role, aliases in commands.items():
+        if prefix in {alias.casefold() for alias in aliases}:
+            return role, body.strip()
+    return None
+
+
 def _annotate_signal_identity(event: Any, **kwargs):
     """Expose the native incoming identity through supported SessionSource metadata.
 
@@ -375,7 +396,8 @@ def _annotate_signal_identity(event: Any, **kwargs):
         return None
     if not _trusted_signal_source(platform, source):
         return None
-    if not re.match(r"(?is)^(merke|delegiere)\s*:", _safe_text(getattr(event, "text", ""), 8000)):
+    commands, _ = _capture_options()
+    if not _match_capture(_safe_text(getattr(event, "text", ""), 8000), commands):
         return None
     raw = getattr(event, "raw_message", None)
     if not isinstance(raw, dict) or str(raw.get("sender") or "") != str(details.get("user_id") or ""):
@@ -399,11 +421,14 @@ def _capture_message(session_key: str, platform: str, source: Any, message_id: s
     sender = str(details.get("user_id") or "")
     message_id = message_id or details.get("message_id")
     approval = _APPROVAL.fullmatch(raw)
-    command_match = re.match(r"(?is)^(merke|delegiere)\s*:\s*(.+)$", raw)
+    commands, language = _capture_options()
+    def reply(en, de):
+        return de if language == "de" else en
+    command_match = _match_capture(raw, commands)
     if not trusted and (approval or command_match):
         return {
             "action": "handled",
-            "reply": "Dieser Befehl wurde nicht verarbeitet. Er ist nur im konfigurierten Signal-Heimkanal zulässig.",
+            "reply": reply("This command is allowed only in the configured Signal home channel; it was not processed.", "Dieser Befehl wurde nicht verarbeitet. Er ist nur im konfigurierten Signal-Heimkanal zulässig."),
         }
     if not trusted:
         return None
@@ -419,37 +444,35 @@ def _capture_message(session_key: str, platform: str, source: Any, message_id: s
             if row and queue.approve(approval_id, "Hermes"):
                 return {
                     "action": "handled",
-                    "reply": "Freigabe für genau diese Aufgabenaktion erfasst. Sie wurde nicht an eine andere Aufgabe übertragen.",
+                    "reply": reply("Approval recorded for this task action only. It was not transferred to another task.", "Freigabe für genau diese Aufgabenaktion erfasst. Sie wurde nicht an eine andere Aufgabe übertragen."),
                 }
-            return {"action": "handled", "reply": "Kein gültiger, offener Freigabeantrag gefunden."}
+            return {"action": "handled", "reply": reply("No valid pending approval request found.", "Kein gültiger, offener Freigabeantrag gefunden.")}
         except (DavError, SecretUnavailable, SettingsError):
-            return {"action": "handled", "reply": "Freigabe konnte lokal nicht geprüft werden; es wurde nichts ausgeführt."}
+            return {"action": "handled", "reply": reply("Approval could not be checked locally; nothing was executed.", "Freigabe konnte lokal nicht geprüft werden; es wurde nichts ausgeführt.")}
 
     if not command_match:
         return None
-    command = command_match.group(1).casefold()
-    captured = command_match.group(2).strip()
+    collection, captured = command_match
     if not captured:
         return None
     if not message_id:
-        return {"action": "handled", "reply": "Die Signal-Nachricht hatte keine stabile ID; sie wurde nicht gespeichert."}
-    collection = "Inbox" if command == "merke" else "Hermes"
+        return {"action": "handled", "reply": reply("The Signal message had no stable ID; it was not saved.", "Die Signal-Nachricht hatte keine stabile ID; sie wurde nicht gespeichert.")}
     uid = _stable_signal_uid(str(message_id), chat_id, sender)
     try:
         _, _, due, date_ambiguous = _create_capture(collection, captured, uid)
         if collection == "Inbox":
-            reply = "In Eingang (Inbox) gespeichert; diese Liste wird nicht ausgeführt."
+            response = reply("Saved to the configured Inbox collection; tasks in this list are not executed.", "In der konfigurierten Inbox-Sammlung gespeichert; diese Liste wird nicht ausgeführt.")
         else:
-            reply = "In Hermes gespeichert und für den nächsten fünfminütigen Abgleich vorgemerkt."
+            response = reply("Saved to Hermes for the next check in about five minutes.", "In Hermes gespeichert und für den nächsten fünfminütigen Abgleich vorgemerkt.")
         if due:
-            reply += f" Fälligkeit: {due.isoformat()}."
+            response += reply(f" Due: {due.isoformat()}.", f" Fälligkeit: {due.isoformat()}.")
         elif date_ambiguous:
-            reply += " Kein eindeutiges Fälligkeitsdatum eingetragen; nutze für eine Frist z. B. „bis 2026-10-15“."
-        return {"action": "handled", "reply": reply}
+            response += reply(' No unambiguous deadline was set; use e.g. "due 2026-12-15".', ' Kein eindeutiges Fälligkeitsdatum eingetragen; nutze z. B. „bis 2026-12-15“.')
+        return {"action": "handled", "reply": response}
     except (DavError, SecretUnavailable, SettingsError):
         return {
             "action": "handled",
-            "reply": "Die Aufgabe konnte nicht sicher gespeichert werden. Es wurde nichts an andere Sammlungen gesendet.",
+            "reply": reply("The task could not be saved safely. Nothing was sent to other collections.", "Die Aufgabe konnte nicht sicher gespeichert werden. Es wurde nichts an andere Sammlungen gesendet."),
         }
 
 

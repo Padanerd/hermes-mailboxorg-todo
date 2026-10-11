@@ -421,6 +421,10 @@ class CalDAVTests(unittest.TestCase):
 
 class PluginTests(unittest.TestCase):
     def setUp(self):
+        from mailbox_todo.settings import DEFAULT_COMMANDS
+        options = patch("mailbox_todo._capture_options", return_value=(DEFAULT_COMMANDS, "en"))
+        options.start()
+        self.addCleanup(options.stop)
         self.tmp = tempfile.TemporaryDirectory()
         self.queue = QueueStore(Path(self.tmp.name) / "state.sqlite3")
         self.dav = FakeDAV()
@@ -446,7 +450,7 @@ class PluginTests(unittest.TestCase):
             self.assertIsNone(event.message_id)
             self.assertEqual(source.message_id, str(timestamp))
             reply = _capture_message('s','signal',source.to_dict(),None,event.text)
-            self.assertIn('gespeichert', reply['reply'])
+            self.assertIn('Saved', reply['reply'])
         self.assertEqual(len(self.dav.items), 2)
 
     def test_signal_native_identity_rejects_missing_or_mismatched_transport_data(self):
